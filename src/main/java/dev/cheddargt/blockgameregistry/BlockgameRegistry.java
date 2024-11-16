@@ -18,9 +18,7 @@ public class BlockgameRegistry implements ModInitializer {
 		// This code runs as soon as Minecraft is in a mod-load-ready state.
 		// However, some things (like resources) may still be uninitialized.
 		// Proceed with mild caution.
-
-		ChatMessage listener = new ChatMessage();
-
+		LOGGER.info("Registry is alive!");
 		ChatMessage.register(LOGGER);
 	}
 }

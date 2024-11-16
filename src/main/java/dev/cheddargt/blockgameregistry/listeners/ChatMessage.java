@@ -1,50 +1,55 @@
 package dev.cheddargt.blockgameregistry.listeners;
 
-import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
+import com.mojang.authlib.GameProfile;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
+import net.minecraft.network.message.MessageType;
 import net.minecraft.network.message.SignedMessage;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.server.network.ServerPlayerEntity;
 import net.minecraft.text.Text;
+import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
+
+import java.time.Instant;
 
 public class ChatMessage {
     static Logger chatLogger;
 
     public static void register (Logger logger) {
         chatLogger = logger;
+        logger.info("Registry is listening!");
 
-        ServerMessageEvents.CHAT_MESSAGE.register((message, player, params) -> {
-            onChatMessageReceived(player, message);
+        ClientReceiveMessageEvents.CHAT.register(new ClientReceiveMessageEvents.Chat() {
+            @Override
+            public void onReceiveChatMessage(Text text, @Nullable SignedMessage signedMessage, @Nullable GameProfile gameProfile, MessageType.Parameters parameters, Instant instant) {
+                onChatMessageReceived(text, parameters, instant);
+            }
         });
 
-        ServerMessageEvents.GAME_MESSAGE.register((server, message, overlay) -> {
-            onGameMessageReceived(server, message);
-
-        });
-
-        ServerMessageEvents.COMMAND_MESSAGE.register((message, source, params) -> {
-            onCommandMessageReceived(source, message);
+        // message, signedMessage, sender, params, receptionTimestamp
+        ClientReceiveMessageEvents.GAME.register(new ClientReceiveMessageEvents.Game() {
+            @Override
+            public void onReceiveGameMessage(Text text, boolean b) {
+                onGameMessageReceived(text);
+            }
         });
     }
 
-    private static void onChatMessageReceived(ServerPlayerEntity player, SignedMessage message) {
+    private static void onChatMessageReceived(Text message, MessageType.Parameters params, Instant instant) {
         // Handle chat message
-        System.out.println("Chat message received: " + message.getContent().getString());
 
-        if (message.getContent().getString().contains("breakpoint")) {
-            chatLogger.info("===== breakpoint reached!: {}", message.getContent().getString());
-            chatLogger.info("===== breakpoint ended!!: {}", message.getContent().getString());
+        chatLogger.info("Chat message received: {}", message);
+        if (message.getString().contains("breakpoint")) {
+            chatLogger.info("===== breakpoint reached!: {}", message.getString());
+            chatLogger.info("===== breakpoint ended!!: {}", message.getString());
         }
     }
 
-    private static void onGameMessageReceived(MinecraftServer server, Text message) {
-        // Handle game message
-        chatLogger.info("Game message received: {}", message.getString());
-    }
+    private static void onGameMessageReceived(Text message) {
+        // Handle chat message
 
-    private static void onCommandMessageReceived(ServerCommandSource source, SignedMessage message) {
-        //Handle command message
-        chatLogger.info("Command message received: {}", message.getContent().getString());
+        chatLogger.info("Game message received: {}", message);
+        if (message.getString().contains("breakpoint")) {
+            chatLogger.info("===== (g) breakpoint reached!: {}", message.getString());
+            chatLogger.info("===== (g) breakpoint ended!!: {}", message.getString());
+        }
     }
 }
