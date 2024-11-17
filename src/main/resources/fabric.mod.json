@@ -22,11 +22,8 @@
 			"dev.cheddargt.blockgameregistry.BlockgameRegistryDataGenerator"
 		]
 	},
-	"mixins": [
-		"blockgame-registry.mixins.json"
-	],
 	"depends": {
-		"fabricloader": ">=0.16.9",
+		"fabricloader": ">=0.16.3",
 		"minecraft": "~1.20.2",
 		"java": ">=17",
 		"fabric-api": "*"
