@@ -21,7 +21,6 @@ import java.util.List;
 public class ChatLog {
     public static final Path AUCTION_HOUSE_PATH = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("blockgame-registry").resolve("auction-house").resolve("auction-house.json");
     private static final List<String> messages = new ArrayList<>();
-    private static final List<String> history = new ArrayList<>();
     private static int ticksSavingInterval = 20;
     private static final int MAX_MESSAGES = 100; // Adjust this value as needed
     private static final Gson GSON = new GsonBuilder()
@@ -41,12 +40,10 @@ public class ChatLog {
         ensureDirectoryExists();
         try {
             List<String> parsedMessages = new ArrayList<>();
-            for (Text message : messages) {
-                parsedMessages.add(parsedText);
-            }
+            parsedMessages.addAll(messages);
 
             ParsedMessages categorizedMessages = parseSalesListings(parsedMessages);
-            Data data = new Data(categorizedMessages.getSales(), categorizedMessages.getListings());
+            ParsedMessages data = new ParsedMessages(categorizedMessages.getMessageHistory());
             String json = GSON.toJson(data);
             Files.writeString(AUCTION_HOUSE_PATH, json);
             BlockgameRegistry.LOGGER.info("Chat log saved to {}", AUCTION_HOUSE_PATH);
@@ -80,40 +77,15 @@ public class ChatLog {
         ticksSavingInterval--;
     }
 
-    public static void deserialize() {
-        if (Files.exists(AUCTION_HOUSE_PATH)) {
-            try {
-                String json = Files.readString(AUCTION_HOUSE_PATH);
-                Data data = GSON.fromJson(json, Data.class);
-                messages.clear();
-                history.clear();
-                // Convert ParsedMessages back to Text if needed
-                // messages.addAll(data.getMessages());
-                // history.addAll(data.getHistory());
-                BlockgameRegistry.LOGGER.info("Chat log loaded from {}", AUCTION_HOUSE_PATH);
-
-                // Example usage after deserialization
-                List<String> parsedMessages = new ArrayList<>();
-                for (ParsedMessage sale : data.getSales()) {
-                    parsedMessages.add(sale.toString()); // Adjust as needed
-                }
-                for (ParsedMessage listing : data.getListings()) {
-                    parsedMessages.add(listing.toString()); // Adjust as needed
-                }
-                ParsedMessages categorizedMessages = parseSalesListings(parsedMessages);
-                // Do something with categorizedMessages if needed
-
-            } catch (IOException e) {
-                BlockgameRegistry.LOGGER.error("Failed to load chat log", e);
-            }
-        }
-    }
 
     public static void addMessage(Text message) {
         JsonObject jsonObject = GSON.toJsonTree(message).getAsJsonObject();
         String parsedText = extractText(jsonObject);
 
-        messages.add(parsedText);
+        if (parsedText.contains("zAuctionHouse")) {
+            messages.add(parsedText);
+        }
+
         if (messages.size() > MAX_MESSAGES) {
             messages.remove(0);
         }
@@ -137,74 +109,65 @@ public class ChatLog {
         return new ParsedMessage(itemName, itemPrice, null, "sale");
     }
 
+    public static class ParsedMessages {
+        private List<ParsedMessage> messageHistory;
+
+        public ParsedMessages(List<ParsedMessage> history) {
+            this.messageHistory = history;
+        }
+
+        // Getters and setters
+        public List<ParsedMessage> getMessageHistory() {
+            return messageHistory;
+        }
+
+        public void setMessageHistory(List<ParsedMessage> history) {
+            this.messageHistory = history;
+        }
+    }
+
     public static ParsedMessages parseSalesListings(List<String> allMessages) {
-        List<ParsedMessage> sales = new ArrayList<>();
-        List<ParsedMessage> listings = new ArrayList<>();
+        List<ParsedMessage> history = new ArrayList<>();
 
         for (String msg : allMessages) {
             if (msg.contains("removed")) {
                 continue;
             } else if (msg.contains("bought")) {
-                sales.add(addSale(msg));
+                history.add(addSale(msg));
             } else if (msg.contains("sale")) {
-                listings.add(addListing(msg));
+                history.add(addListing(msg));
             }
         }
 
-        return new ParsedMessages(sales, listings);
-    }
-
-    private static class Data {
-        List<ParsedMessage> sales;
-        List<ParsedMessage> listings;
-
-        Data(List<ParsedMessage> sales, List<ParsedMessage> listings) {
-            this.sales = sales;
-            this.listings = listings;
-        }
-
-        // Getters and setters
-        public List<ParsedMessage> getSales() {
-            return sales;
-        }
-
-        public void setSales(List<ParsedMessage> sales) {
-            this.sales = sales;
-        }
-
-        public List<ParsedMessage> getListings() {
-            return listings;
-        }
-
-        public void setListings(List<ParsedMessage> listings) {
-            this.listings = listings;
-        }
-    }
-
-    public static class ParsedMessages {
-        private List<ParsedMessage> sales;
-        private List<ParsedMessage> listings;
-
-        public ParsedMessages(List<ParsedMessage> sales, List<ParsedMessage> listings) {
-            this.sales = sales;
-            this.listings = listings;
-        }
-
-        // Getters and setters
-        public List<ParsedMessage> getSales() {
-            return sales;
-        }
-
-        public void setSales(List<ParsedMessage> sales) {
-            this.sales = sales;
-        }
-
-        public List<ParsedMessage> getListings() {
-            return listings;
-        }
-
-        public void setListings(List<ParsedMessage> listings) {
-            this.listings = listings;
-        }
+        return new ParsedMessages(history);
     }
 }
+
+//    public static void deserialize() {
+//        if (Files.exists(AUCTION_HOUSE_PATH)) {
+//            try {
+//                String json = Files.readString(AUCTION_HOUSE_PATH);
+//                Data data = GSON.fromJson(json, Data.class);
+//                messages.clear();
+//                history.clear();
+//                // Convert ParsedMessages back to Text if needed
+//                // messages.addAll(data.getMessages());
+//                // history.addAll(data.getHistory());
+//                BlockgameRegistry.LOGGER.info("Chat log loaded from {}", AUCTION_HOUSE_PATH);
+//
+//                // Example usage after deserialization
+//                List<String> parsedMessages = new ArrayList<>();
+//                for (ParsedMessage sale : data.getSales()) {
+//                    parsedMessages.add(sale.toString()); // Adjust as needed
+//                }
+//                for (ParsedMessage listing : data.getListings()) {
+//                    parsedMessages.add(listing.toString()); // Adjust as needed
+//                }
+//                ParsedMessages categorizedMessages = parseSalesListings(parsedMessages);
+//                // Do something with categorizedMessages if needed
+//
+//            } catch (IOException e) {
+//                BlockgameRegistry.LOGGER.error("Failed to load chat log", e);
+//            }
+//        }
+//    }
