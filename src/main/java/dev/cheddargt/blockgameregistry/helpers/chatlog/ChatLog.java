@@ -22,7 +22,7 @@ public class ChatLog {
     public static final Path AUCTION_HOUSE_PATH = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("blockgame-registry").resolve("auction-house").resolve("auction-house.json");
     private static final List<String> messages = new ArrayList<>();
     private static int ticksSavingInterval = 20;
-    private static final int MAX_MESSAGES = 100; // Adjust this value as needed
+    private static final int MAX_MESSAGES = 120; // Adjust this value as needed
     private static final Gson GSON = new GsonBuilder()
             .registerTypeAdapter(Text.class, (JsonSerializer<Text>) (src, type, context) -> Text.Serializer.toJsonTree(src))
             .registerTypeAdapter(Text.class, (JsonDeserializer<Text>) (json, type, context) -> Text.Serializer.fromJson(json))
@@ -39,12 +39,8 @@ public class ChatLog {
     public static void serialize() {
         ensureDirectoryExists();
         try {
-            List<String> parsedMessages = new ArrayList<>();
-            parsedMessages.addAll(messages);
-
-            ParsedMessages categorizedMessages = parseSalesListings(parsedMessages);
-            ParsedMessages data = new ParsedMessages(categorizedMessages.getMessageHistory());
-            String json = GSON.toJson(data);
+            ParsedMessages parsedMessages = parseSalesListings(messages);
+            String json = GSON.toJson(parsedMessages);
             Files.writeString(AUCTION_HOUSE_PATH, json);
             BlockgameRegistry.LOGGER.info("Chat log saved to {}", AUCTION_HOUSE_PATH);
         } catch (IOException e) {

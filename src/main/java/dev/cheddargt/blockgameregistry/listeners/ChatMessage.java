@@ -26,7 +26,7 @@ public class ChatMessage {
         // Handle chat message
         BlockgameRegistry.LOGGER.info("Chat message received: {}", message);
         ChatLog.addMessage(message);
-        ChatLog.serialize();
+        ChatLog.ticksSavingCounter();
     }
 
     private static void onGameMessageReceived(Text message) {
