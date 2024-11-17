@@ -11,6 +11,7 @@ import com.google.gson.JsonSerializer;
 
 import dev.cheddargt.blockgameregistry.BlockgameRegistry;
 import dev.cheddargt.blockgameregistry.entities.ParsedMessage;
+
 import net.minecraft.text.Text;
 
 import java.io.BufferedWriter;
@@ -22,10 +23,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ChatLog {
-    public static Boolean ENABLE_AUCTION_RECEIPTS = true;
+    public static boolean ENABLE_AUCTION_RECEIPTS = true;
     public static int SECONDS_SAVING_INTERVAL = 6; // move to config
     private static int ticksSavingInterval = 1000*SECONDS_SAVING_INTERVAL; // move to config
     public static final Path AUCTION_HOUSE_PATH = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("blockgame-registry").resolve("auction-house").resolve("receipts.json");
+    private static final List<Text> gameMessages = new ArrayList<>();
     private static final List<String> messages = new ArrayList<>();
     private static final int MAX_MESSAGES = 50; // Adjust this value as needed
     private static final Gson GSON = new GsonBuilder()
@@ -44,15 +46,15 @@ public class ChatLog {
     public static void serialize() {
         ensureDirectoryExists();
         try (BufferedWriter writer = Files.newBufferedWriter(AUCTION_HOUSE_PATH, StandardOpenOption.APPEND, StandardOpenOption.CREATE)) {
-                ParsedMessages parsedMessages = parseSalesListings(messages);
-                for (ParsedMessage msg : parsedMessages.getMessageHistory()) {
-                    String json = GSON.toJson(msg);
-                    writer.write(json);
-                    writer.newLine();
-                }
-                messages.clear();
-                BlockgameRegistry.LOGGER.info("Updated auction-history");
-            } catch (IOException e) {
+            ParsedMessages parsedMessages = parseSalesListings(gameMessages);
+            for (ParsedMessage msg : parsedMessages.getMessageHistory()) {
+                String json = GSON.toJson(msg);
+                writer.write(json);
+                writer.newLine();
+            }
+            messages.clear(); // Remover mensagens da memória após a escrita
+            BlockgameRegistry.LOGGER.info("Updated auction-history em {}", AUCTION_HOUSE_PATH);
+        } catch (IOException e) {
                 BlockgameRegistry.LOGGER.error("Failed to update auction-history", e);
             }
     }
@@ -90,8 +92,8 @@ public class ChatLog {
     }
 
     public static void ticksSavingCounter() {
+        serialize();
         if (ticksSavingInterval == 0) {
-            serialize();
             ticksSavingInterval = 1000*SECONDS_SAVING_INTERVAL; // Reset the counter
         }
         ticksSavingInterval--;
@@ -99,11 +101,8 @@ public class ChatLog {
 
 
     public static void addMessage(Text message) {
-        JsonObject jsonObject = GSON.toJsonTree(message).getAsJsonObject();
-        String parsedText = extractText(jsonObject);
-
-        BlockgameRegistry.LOGGER.info("Adding message to messages array: {}", parsedText);
-        messages.add(parsedText);
+        gameMessages.add(message);
+        BlockgameRegistry.LOGGER.info("Adding message to messages array");
 
         if (messages.size() > MAX_MESSAGES) {
             messages.remove(0);
@@ -111,7 +110,7 @@ public class ChatLog {
     }
 
     public static ParsedMessage addListing(String msg) {
-        // Example: You just put x49 Candy Corn on sale for 45 Coin.
+        // Example: zAuctionHouse • You just put x49 Candy Corn on sale for 45 Coin.
         String transactionInfo = msg.split("You just put x")[1];
         String[] itemAmountAndName = transactionInfo.split(" ");
         String itemAmount = itemAmountAndName[0];
@@ -121,7 +120,7 @@ public class ChatLog {
     }
 
     public static ParsedMessage addSale(String msg) {
-        // Example: Thebigshabam just bought Candy Corn for 45 Coin.
+        // Example: zAuctionHouse • Steve just bought Candy Corn for 45 Coin.
         String transactionInfo = msg.split(" just bought ")[1];
         String itemName = transactionInfo.split(" for ")[0];
         String itemPrice = transactionInfo.split(" for ")[1].split(" Coin")[0];
@@ -145,29 +144,31 @@ public class ChatLog {
         }
     }
 
-    public static ParsedMessages parseSalesListings(List<String> allMessages) {
+    public static ParsedMessages parseSalesListings(List<Text> allMessages) {
         List<ParsedMessage> history = new ArrayList<>();
 
-        BlockgameRegistry.LOGGER.info("Parsing sales and listings from chat log");
+        BlockgameRegistry.LOGGER.info("Parsing sales and listings from game messages");
 
-        for (String msg : allMessages) {
-
-            if (msg.contains("removed")) {
+        for (Text msg : allMessages) {
+            JsonObject jsonObject = GSON.toJsonTree(msg).getAsJsonObject();
+            String parsedMsg = extractText(jsonObject);
+            boolean saveMessage = shouldSaveMessage(parsedMsg);
+            if (!saveMessage && parsedMsg.contains("removed")) {
                 continue;
-            } else if (msg.contains("bought")) {
+            } else if (saveMessage && parsedMsg.contains("bought")) {
                 BlockgameRegistry.LOGGER.info("sales++");
-                history.add(addSale(msg));
-            } else if (msg.contains("sale")) {
+                history.add(addSale(parsedMsg));
+            } else if (saveMessage && parsedMsg.contains("sale")) {
                 BlockgameRegistry.LOGGER.info("listings++");
-                history.add(addListing(msg));
+                history.add(addListing(parsedMsg));
             }
         }
 
         return new ParsedMessages(history);
     }
 
-    public static Boolean shouldSaveMessage(String msg) {
-        Boolean isAuctionMsg = msg.contains("zAuctionHouse");
+    public static boolean shouldSaveMessage(String msg) {
+        boolean isAuctionMsg = msg.contains("zAuctionHouse");
 
         BlockgameRegistry.LOGGER.info(isAuctionMsg + " - " + msg);
         if (isAuctionMsg && ENABLE_AUCTION_RECEIPTS) {
