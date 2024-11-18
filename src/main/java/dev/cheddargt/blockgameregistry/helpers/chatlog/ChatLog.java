@@ -1,24 +1,16 @@
 package dev.cheddargt.blockgameregistry.helpers.chatlog;
 
+import com.google.gson.*;
 import net.fabricmc.loader.api.FabricLoader;
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
-import com.google.gson.JsonArray;
-import com.google.gson.JsonDeserializer;
-import com.google.gson.JsonElement;
-import com.google.gson.JsonObject;
-import com.google.gson.JsonSerializer;
 
 import dev.cheddargt.blockgameregistry.BlockgameRegistry;
 import dev.cheddargt.blockgameregistry.entities.ParsedMessage;
 
 import net.minecraft.text.Text;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -33,6 +25,7 @@ public class ChatLog {
     private static final Gson GSON = new GsonBuilder()
             .registerTypeAdapter(Text.class, (JsonSerializer<Text>) (src, type, context) -> Text.Serializer.toJsonTree(src))
             .registerTypeAdapter(Text.class, (JsonDeserializer<Text>) (json, type, context) -> Text.Serializer.fromJson(json))
+            .registerTypeAdapter(Text.class, (InstanceCreator<Text>) type -> Text.empty())
             .create();
 
     private static void ensureDirectoryExists() {
@@ -45,18 +38,15 @@ public class ChatLog {
 
     public static void serialize() {
         ensureDirectoryExists();
-        try (BufferedWriter writer = Files.newBufferedWriter(AUCTION_HOUSE_PATH, StandardOpenOption.APPEND, StandardOpenOption.CREATE)) {
-            ParsedMessages parsedMessages = parseSalesListings(gameMessages);
-            for (ParsedMessage msg : parsedMessages.getMessageHistory()) {
-                String json = GSON.toJson(msg);
-                writer.write(json);
-                writer.newLine();
-            }
-            messages.clear(); // Remover mensagens da memória após a escrita
-            BlockgameRegistry.LOGGER.info("Updated auction-history em {}", AUCTION_HOUSE_PATH);
+        try {
+            ParsedMessages categorizedMessages = parseSalesListings(gameMessages);
+            Data data = new Data(categorizedMessages.getSales(), categorizedMessages.getListings());
+            String json = GSON.toJson(data);
+            Files.writeString(AUCTION_HOUSE_PATH, json);
+            BlockgameRegistry.LOGGER.info("Chat log saved to {}", AUCTION_HOUSE_PATH);
         } catch (IOException e) {
-                BlockgameRegistry.LOGGER.error("Failed to update auction-history", e);
-            }
+            BlockgameRegistry.LOGGER.error("Failed to save chat log", e);
+        }
     }
 
     // Extracts the text from a JSON object
@@ -127,54 +117,87 @@ public class ChatLog {
         return new ParsedMessage(itemName, itemPrice, null, "sale");
     }
 
-    public static class ParsedMessages {
-        private List<ParsedMessage> messageHistory;
-
-        public ParsedMessages(List<ParsedMessage> history) {
-            this.messageHistory = history;
-        }
-
-        // Getters and setters
-        public List<ParsedMessage> getMessageHistory() {
-            return messageHistory;
-        }
-
-        public void setMessageHistory(List<ParsedMessage> history) {
-            this.messageHistory = history;
-        }
-    }
-
     public static ParsedMessages parseSalesListings(List<Text> allMessages) {
-        List<ParsedMessage> history = new ArrayList<>();
-
-        BlockgameRegistry.LOGGER.info("Parsing sales and listings from game messages");
+        List<ParsedMessage> sales = new ArrayList<>();
+        List<ParsedMessage> listings = new ArrayList<>();
 
         for (Text msg : allMessages) {
-            JsonObject jsonObject = GSON.toJsonTree(msg).getAsJsonObject();
-            String parsedMsg = extractText(jsonObject);
-            boolean saveMessage = shouldSaveMessage(parsedMsg);
-            if (!saveMessage && parsedMsg.contains("removed")) {
+            BlockgameRegistry.LOGGER.info("Parsing message: {}", msg);
+            String parsedMsg = extractText(Text.Serializer.toJsonTree(msg).getAsJsonObject());
+
+            if (parsedMsg.contains("removed") || !shouldSaveMessage(parsedMsg)) {
                 continue;
-            } else if (saveMessage && parsedMsg.contains("bought")) {
+            } else if (parsedMsg.contains("bought")) {
                 BlockgameRegistry.LOGGER.info("sales++");
-                history.add(addSale(parsedMsg));
-            } else if (saveMessage && parsedMsg.contains("sale")) {
+                sales.add(addSale(parsedMsg));
+            } else if (parsedMsg.contains("sale")) {
                 BlockgameRegistry.LOGGER.info("listings++");
-                history.add(addListing(parsedMsg));
+                listings.add(addListing(parsedMsg));
             }
         }
 
-        return new ParsedMessages(history);
+        return new ParsedMessages(sales, listings);
     }
 
     public static boolean shouldSaveMessage(String msg) {
         boolean isAuctionMsg = msg.contains("zAuctionHouse");
 
-        BlockgameRegistry.LOGGER.info(isAuctionMsg + " - " + msg);
-        if (isAuctionMsg && ENABLE_AUCTION_RECEIPTS) {
-            return true;
+        BlockgameRegistry.LOGGER.info("shouldSaveMessage: {}", isAuctionMsg);
+        return isAuctionMsg && ENABLE_AUCTION_RECEIPTS;
+    }
+
+    private static class Data {
+        List<ParsedMessage> sales;
+        List<ParsedMessage> listings;
+
+        Data(List<ParsedMessage> sales, List<ParsedMessage> listings) {
+            this.sales = sales;
+            this.listings = listings;
         }
-        return false;
+
+        // Getters and setters
+        public List<ParsedMessage> getSales() {
+            return sales;
+        }
+
+        public void setSales(List<ParsedMessage> sales) {
+            this.sales = sales;
+        }
+
+        public List<ParsedMessage> getListings() {
+            return listings;
+        }
+
+        public void setListings(List<ParsedMessage> listings) {
+            this.listings = listings;
+        }
+    }
+
+    public static class ParsedMessages {
+        private List<ParsedMessage> sales;
+        private List<ParsedMessage> listings;
+
+        public ParsedMessages(List<ParsedMessage> sales, List<ParsedMessage> listings) {
+            this.sales = sales;
+            this.listings = listings;
+        }
+
+        // Getters and setters
+        public List<ParsedMessage> getSales() {
+            return sales;
+        }
+
+        public void setSales(List<ParsedMessage> sales) {
+            this.sales = sales;
+        }
+
+        public List<ParsedMessage> getListings() {
+            return listings;
+        }
+
+        public void setListings(List<ParsedMessage> listings) {
+            this.listings = listings;
+        }
     }
 }
 

@@ -1,5 +1,8 @@
 package dev.cheddargt.blockgameregistry.entities;
 
+import org.apache.logging.log4j.core.time.Instant;
+
+import java.sql.Timestamp;
 import java.util.Date;
 
 public class ParsedMessage {
@@ -14,7 +17,7 @@ public class ParsedMessage {
         this.price = price;
         this.amount = amount;
         this.type = type;
-        setTimestamp();
+        this.timestamp = new Date();
     }
 
     // Getters and setters
@@ -54,7 +57,7 @@ public class ParsedMessage {
         return timestamp;
     }
 
-    public void setTimestamp() {
-        this.timestamp = Date.from(timestamp.toInstant());
+    public void setTimestamp(Date timestamp) {
+        this.timestamp = timestamp;
     }
 }
