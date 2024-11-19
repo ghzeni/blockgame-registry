@@ -8,20 +8,22 @@ import dev.cheddargt.blockgameregistry.entities.ParsedMessage;
 
 import net.minecraft.text.Text;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
 
 public class ChatLog {
     public static boolean ENABLE_AUCTION_RECEIPTS = true;
-    public static int SECONDS_SAVING_INTERVAL = 6; // move to config
-    private static int ticksSavingInterval = 1000*SECONDS_SAVING_INTERVAL; // move to config
+    public static int SECONDS_SAVING_INTERVAL = 6;
+    private static int ticksSavingInterval = 1000*SECONDS_SAVING_INTERVAL;
     public static final Path AUCTION_HOUSE_PATH = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("blockgame-registry").resolve("auction-house").resolve("receipts.json");
     private static final List<Text> gameMessages = new ArrayList<>();
     private static final List<String> messages = new ArrayList<>();
-    private static final int MAX_MESSAGES = 50; // Adjust this value as needed
+    private static final int MAX_MESSAGES = 100;
     private static final Gson GSON = new GsonBuilder()
             .registerTypeAdapter(Text.class, (JsonSerializer<Text>) (src, type, context) -> Text.Serializer.toJsonTree(src))
             .registerTypeAdapter(Text.class, (JsonDeserializer<Text>) (json, type, context) -> Text.Serializer.fromJson(json))
@@ -38,27 +40,33 @@ public class ChatLog {
 
     public static void serialize() {
         ensureDirectoryExists();
-        try {
-            ParsedMessages categorizedMessages = parseSalesListings(gameMessages);
-            Data data = new Data(categorizedMessages.getSales(), categorizedMessages.getListings());
-            String json = GSON.toJson(data);
-            Files.writeString(AUCTION_HOUSE_PATH, json);
-            BlockgameRegistry.LOGGER.info("Chat log saved to {}", AUCTION_HOUSE_PATH);
+        try (BufferedWriter writer = Files.newBufferedWriter(AUCTION_HOUSE_PATH, StandardOpenOption.APPEND, StandardOpenOption.CREATE)) {
+            ParsedMessages parsedMessages = parseSalesListings(gameMessages);
+            for (ParsedMessage msg : parsedMessages.getSales()) {
+                String json = GSON.toJson(msg);
+                writer.write(json);
+                writer.newLine();
+            }
+            for (ParsedMessage msg : parsedMessages.getListings()) {
+                String json = GSON.toJson(msg);
+                writer.write(json);
+                writer.newLine();
+            }
+            BlockgameRegistry.LOGGER.info("Updated chat log");
+            gameMessages.clear();
+            messages.clear();
         } catch (IOException e) {
-            BlockgameRegistry.LOGGER.error("Failed to save chat log", e);
+            BlockgameRegistry.LOGGER.error("Failed to update chat log", e);
         }
     }
 
-    // Extracts the text from a JSON object
     private static String extractText(JsonObject jsonObject) {
         StringBuilder result = new StringBuilder();
 
-        // Adds the value of the "text" key, if it exists
         if (jsonObject.has("text")) {
             result.append(jsonObject.get("text").getAsString());
         }
 
-        // Processes the "extra" array recursively, if it exists
         if (jsonObject.has("extra")) {
             JsonArray extraArray = jsonObject.getAsJsonArray("extra");
             for (JsonElement extraElement : extraArray) {
@@ -68,7 +76,6 @@ public class ChatLog {
             }
         }
 
-        // Processes the "with" array recursively, if it exists
         if (jsonObject.has("with")) {
             JsonArray withArray = jsonObject.getAsJsonArray("with");
             for (JsonElement withElement : withArray) {
@@ -81,13 +88,13 @@ public class ChatLog {
         return result.toString();
     }
 
-    public static void ticksSavingCounter() {
-        serialize();
-        if (ticksSavingInterval == 0) {
-            ticksSavingInterval = 1000*SECONDS_SAVING_INTERVAL; // Reset the counter
-        }
-        ticksSavingInterval--;
-    }
+//    public static void ticksSavingCounter() {
+//        if (ticksSavingInterval == 0) {
+//            serialize();
+//            ticksSavingInterval = 1000*SECONDS_SAVING_INTERVAL; // Reset the counter
+//        }
+//        ticksSavingInterval--;
+//    }
 
 
     public static void addMessage(Text message) {
@@ -106,7 +113,7 @@ public class ChatLog {
         String itemAmount = itemAmountAndName[0];
         String itemName = transactionInfo.split(" on sale for ")[0].substring(itemAmount.length() + 1);
         String itemPrice = transactionInfo.split(" on sale for ")[1].split(" Coin")[0];
-        return new ParsedMessage(itemName, itemPrice, itemAmount, "listing");
+        return new ParsedMessage(itemName, itemPrice, "listing", itemAmount);
     }
 
     public static ParsedMessage addSale(String msg) {
@@ -114,7 +121,7 @@ public class ChatLog {
         String transactionInfo = msg.split(" just bought ")[1];
         String itemName = transactionInfo.split(" for ")[0];
         String itemPrice = transactionInfo.split(" for ")[1].split(" Coin")[0];
-        return new ParsedMessage(itemName, itemPrice, null, "sale");
+        return new ParsedMessage(itemName, itemPrice, "sale", null);
     }
 
     public static ParsedMessages parseSalesListings(List<Text> allMessages) {
@@ -155,7 +162,6 @@ public class ChatLog {
             this.listings = listings;
         }
 
-        // Getters and setters
         public List<ParsedMessage> getSales() {
             return sales;
         }
@@ -182,7 +188,6 @@ public class ChatLog {
             this.listings = listings;
         }
 
-        // Getters and setters
         public List<ParsedMessage> getSales() {
             return sales;
         }

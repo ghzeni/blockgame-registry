@@ -20,15 +20,12 @@ public class ChatMessage {
     }
 
     private static void onChatMessageReceived(Text message, MessageType.Parameters params, Instant instant) {
-        // Handle chat message
-        BlockgameRegistry.LOGGER.info("Chat message received at: {}", instant);
         ChatLog.addMessage(message);
-        ChatLog.ticksSavingCounter();
+        ChatLog.serialize();
     }
 
     private static void onGameMessageReceived(Text message) {
-        // Handle chat message
-        // ChatLog.addMessage(message);
-        // ChatLog.ticksSavingCounter();
+        ChatLog.addMessage(message);
+        ChatLog.serialize();
     }
 }

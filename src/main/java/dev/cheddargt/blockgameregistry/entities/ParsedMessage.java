@@ -1,23 +1,22 @@
 package dev.cheddargt.blockgameregistry.entities;
 
-import org.apache.logging.log4j.core.time.Instant;
-
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Date;
 
 public class ParsedMessage {
     private String itemName;
     private String price;
-    private String amount;
     private String type;
+    private String amount;
     private Date timestamp;
 
-    public ParsedMessage(String itemName, String price, String amount, String type) {
+    public ParsedMessage(String itemName, String price, String type, String amount) {
         this.itemName = itemName;
         this.price = price;
-        this.amount = amount;
         this.type = type;
-        this.timestamp = new Date();
+        this.amount = amount;
+        this.timestamp = Date.from(Instant.now());
     }
 
     // Getters and setters
