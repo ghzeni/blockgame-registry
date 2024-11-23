@@ -21,11 +21,9 @@ public class ChatMessage {
 
     private static void onChatMessageReceived(Text message, MessageType.Parameters params, Instant instant) {
         ChatLog.addMessage(message);
-        ChatLog.serialize();
     }
 
     private static void onGameMessageReceived(Text message) {
         ChatLog.addMessage(message);
-        ChatLog.serialize();
     }
 }

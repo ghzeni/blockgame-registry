@@ -15,5 +15,9 @@ public class BlockgameRegistry implements ModInitializer {
 	public void onInitialize() {
 		LOGGER.info("Registry is alive!");
 		ChatMessage.register();
+
+		ClientTickEvents.END_CLIENT_TICK.register(client -> {
+			ChatLog.ticksSavingCounter();
+		});
 	}
 }

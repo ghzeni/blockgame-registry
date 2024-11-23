@@ -18,8 +18,9 @@ import java.util.List;
 
 public class ChatLog {
     public static boolean ENABLE_AUCTION_RECEIPTS = true;
-    public static int SECONDS_SAVING_INTERVAL = 6;
-    private static int ticksSavingInterval = 1000*SECONDS_SAVING_INTERVAL;
+    public static int TICKS_PER_SECOND = 20;
+    public static int SECONDS_SAVING_INTERVAL = 300; // 5 minutes - default
+    private static int ticksSavingInterval = TICKS_PER_SECOND*SECONDS_SAVING_INTERVAL;
     public static final Path AUCTION_HOUSE_PATH = FabricLoader.getInstance().getGameDir().resolve("logs").resolve("blockgame-registry").resolve("auction-house").resolve("receipts.json");
     private static final List<Text> gameMessages = new ArrayList<>();
     private static final List<String> messages = new ArrayList<>();
@@ -52,11 +53,10 @@ public class ChatLog {
                 writer.write(json);
                 writer.newLine();
             }
-            BlockgameRegistry.LOGGER.info("Updated chat log");
             gameMessages.clear();
             messages.clear();
         } catch (IOException e) {
-            BlockgameRegistry.LOGGER.error("Failed to update chat log", e);
+            BlockgameRegistry.LOGGER.error("Failed to update chat log - {}", e.getMessage());
         }
     }
 
@@ -88,18 +88,21 @@ public class ChatLog {
         return result.toString();
     }
 
-//    public static void ticksSavingCounter() {
-//        if (ticksSavingInterval == 0) {
-//            serialize();
-//            ticksSavingInterval = 1000*SECONDS_SAVING_INTERVAL; // Reset the counter
-//        }
-//        ticksSavingInterval--;
-//    }
+    public static void ticksSavingCounter() {
+        if (ticksSavingInterval == 0) {
+            try {
+                serialize();
+            } catch (Exception e) {
+                BlockgameRegistry.LOGGER.info("Error serializing messages: {}", e.getMessage());
+            }
+            ticksSavingInterval = TICKS_PER_SECOND*SECONDS_SAVING_INTERVAL; // Reset the counter
+        }
+        ticksSavingInterval--;
+    }
 
 
     public static void addMessage(Text message) {
         gameMessages.add(message);
-        BlockgameRegistry.LOGGER.info("Adding message to messages array");
 
         if (messages.size() > MAX_MESSAGES) {
             messages.remove(0);
@@ -127,20 +130,29 @@ public class ChatLog {
     public static ParsedMessages parseSalesListings(List<Text> allMessages) {
         List<ParsedMessage> sales = new ArrayList<>();
         List<ParsedMessage> listings = new ArrayList<>();
+        
+        try {
+            for (Text msg : allMessages) {
+                if (msg != null) {
+                    String parsedMsg = extractText(Text.Serializer.toJsonTree(msg).getAsJsonObject());
+                    boolean isAuctionMsg = shouldSaveMessage(parsedMsg);
 
-        for (Text msg : allMessages) {
-            BlockgameRegistry.LOGGER.info("Parsing message: {}", msg);
-            String parsedMsg = extractText(Text.Serializer.toJsonTree(msg).getAsJsonObject());
+                    if (parsedMsg.contains("removed") || !isAuctionMsg) {
+                        continue;
+                    } else {
+                        if (parsedMsg.contains("bought")) {
+                            BlockgameRegistry.LOGGER.info("sales++");
+                            sales.add(addSale(parsedMsg));
 
-            if (parsedMsg.contains("removed") || !shouldSaveMessage(parsedMsg)) {
-                continue;
-            } else if (parsedMsg.contains("bought")) {
-                BlockgameRegistry.LOGGER.info("sales++");
-                sales.add(addSale(parsedMsg));
-            } else if (parsedMsg.contains("sale")) {
-                BlockgameRegistry.LOGGER.info("listings++");
-                listings.add(addListing(parsedMsg));
+                        } else if (parsedMsg.contains("sale")) {
+                            BlockgameRegistry.LOGGER.info("listings++");
+                            listings.add(addListing(parsedMsg));
+                        }
+                    }
+                }
             }
+        } catch (Exception e) {
+            BlockgameRegistry.LOGGER.error("Error parsing messages: {}", e.getMessage());
         }
 
         return new ParsedMessages(sales, listings);
@@ -149,7 +161,6 @@ public class ChatLog {
     public static boolean shouldSaveMessage(String msg) {
         boolean isAuctionMsg = msg.contains("zAuctionHouse");
 
-        BlockgameRegistry.LOGGER.info("shouldSaveMessage: {}", isAuctionMsg);
         return isAuctionMsg && ENABLE_AUCTION_RECEIPTS;
     }
 
